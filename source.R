@@ -28,6 +28,7 @@ format_date <- function(df, removeTime=FALSE) {
     df <- sapply(df, gsub, pattern=".000-04:00", replacement="")  
     df <- sapply(df, gsub, pattern=".999-04:00", replacement="")    
   }
+  
   df <- as.POSIXct(df)
   df
 }
@@ -80,9 +81,21 @@ get_matching_data <- function() {
   # select specific columns and reshape dataframe
   dfx <- dfx[,c("date", "startIntersect", "endIntersect", "duration")]
   dfx <- ddply(dfx, .(date), summarize, duration=sum(duration))
+  dfx$date <- as.character(dfx$date)
   
   #create global variable
   assign("match.AndyDeb", dfx, envir = .GlobalEnv)
+  
+  # 
+  # 
+  # merge LSM with match.AndyDeb
+  # and match both data by date
+  #
+  #
+  dfx <- merge(lsm, match.AndyDeb, all=T, by='date')
+  #dfx <- dfx[complete.cases(dfx),]
+  assign("match.lsmAndyDeb", dfx, envir = .GlobalEnv)
+  
 }
 
 # load deb's data from JSON to dataframe format
@@ -132,6 +145,7 @@ load_andy <- function() {
 load_data <- function() {
   load_andy()
   load_deb()
+  load_lsm()
 }
 
 # load andy's data from JSON to dataframe format
@@ -196,6 +210,24 @@ load_library <- function() {
   require(jsonlite)
   require(plyr)
   require(reshape2)
+}
+
+# TO-DO: have all file names saved in a different file
+# then import that file
+# load lsm data
+# change date format from 'mo/day/yr' to 'yr-mo-day' 
+load_lsm <- function() {
+  lsm_file = "~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv"
+  df <- read.csv(lsm_file)
+  
+  # ignore first col 
+  # rename one col
+  df <- df[,2: ncol(df)]
+  df <- rename(df, c("readable.time"="date"))
+
+  df$newdate <- strptime(as.character(df$date), "%mo/%d/%Y")
+  df$date <- format(df$newdate, "%Y-%m-%d")
+  assign("lsm", df, envir = .GlobalEnv)
 }
 
 # draw different graphs/charts
