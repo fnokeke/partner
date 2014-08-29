@@ -73,10 +73,12 @@ get_matching_data <- function() {
   
   # find the actual time intersection 
   # round off duration of intersection in hours (divide by 3600)
+  # change duration format from 'difftime' to 'numeric'
   dfx$startIntersect <- pmax(dfx$andy.start, dfx$deb.start)
   dfx$endIntersect   <- pmin(dfx$andy.end, dfx$deb.end)
   dfx$duration       <- (dfx$endIntersect - dfx$startIntersect) / 3600
   dfx$duration       <- round(dfx$duration, 2)
+  dfx$duration       <- as.numeric(dfx$duration)
 
   # select specific columns and reshape dataframe
   dfx <- dfx[,c("date", "startIntersect", "endIntersect", "duration")]
@@ -86,14 +88,10 @@ get_matching_data <- function() {
   #create global variable
   assign("match.AndyDeb", dfx, envir = .GlobalEnv)
   
-  # 
-  # 
   # merge LSM with match.AndyDeb
   # and match both data by date
-  #
-  #
   dfx <- merge(lsm, match.AndyDeb, all=T, by='date')
-  #dfx <- dfx[complete.cases(dfx),]
+  dfx <- dfx[complete.cases(dfx),]
   assign("match.lsmAndyDeb", dfx, envir = .GlobalEnv)
   
 }
@@ -220,32 +218,49 @@ load_lsm <- function() {
   lsm_file = "~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv"
   df <- read.csv(lsm_file)
   
-  # ignore first col 
+  # drop some cols
   # rename one col
-  df <- df[,2: ncol(df)]
+  # change 'date' format from %m/%d/%Y to POSIX format 
+  # change date type from 'POSIXlt' to 'char'
+  df <- subset(df, select = -c(time, X.1wk.break.))
   df <- rename(df, c("readable.time"="date"))
-
-  df$newdate <- strptime(as.character(df$date), "%mo/%d/%Y")
-  df$date <- format(df$newdate, "%Y-%m-%d")
+  df$date <- strptime(df$date, "%m/%d/%Y")
+  df$date <- as.character(df$date)
+  
   assign("lsm", df, envir = .GlobalEnv)
 }
 
 # draw different graphs/charts
 load_visuals <- function() {
-  # bar graph of date vs time spent together
-  # change all col types to char
-  dataLong <- match.AndyDeb
-  dataLong$date     <- as.character(dataLong$date) 
-  dataLong$duration <- as.character(dataLong$duration) 
-  graph <- qplot(data=dataLong, x=duration, y=date, geom="bar", stat="identity", position="dodge")
+  #BAR GRAPH
+
+  
+  #LINE GRAPH
+  # Change color of both line and points
+  # Change line type and point type, and use thicker line and larger points
+  # Change points to circles with white fill
+  graph <-ggplot(data=match.lsmAndyDeb, aes(x=date, y=duration, group=1)) + 
+              geom_line(colour="red", linetype="dotted", size=0.5) + 
+              geom_point(color="black", size=4, shape=21, fill="white") +
+              xlab("Date together in same location") + 
+              ylab("Duration (No of hours)") +
+              ggtitle("Date vs Duration for Andy & Deborah")
+  
+  ggplot(data=match.lsmAndyDeb, aes(x=intensifier_fraction_A, y=duration, colour=date)) +
+        geom_line(size=1.5) +
+        geom_point() +
+        xlab("Date together in same location") + 
+        ylab("Duration (No of hours)") +
+        ggtitle("Andy vs Deborah")          
+  
   assign("graph.together", graph, envir=.GlobalEnv)  
-   
-            
+  graph
+
 }
 
 #change to workspace directory
 set_dir <- function() {
-  dir = "~/dev/r/"
+  dir = getwd()
   setwd(dir)
   print("Working directory changed.")
 }
