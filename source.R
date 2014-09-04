@@ -87,11 +87,31 @@ get_matching_data <- function() {
   
   #create global variable
   assign("match.AndyDeb", dfx, envir = .GlobalEnv)
+
+  # lsm is weekly while match.AndyDeb is daily so
+  # use cut() to combine both dates
+  dd <- as.Date(match.AndyDeb$date)
+  max_date <- max(dd)
+  break_period <- c(as.Date(lsm$date), max_date)
+  new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
+  match.AndyDeb$lsm_date <- new_col
   
-  # merge LSM with match.AndyDeb
-  # and match both data by date
-  dfx <- merge(lsm, match.AndyDeb, all=T, by='date')
-  dfx <- dfx[complete.cases(dfx),]
+  # summarize and add up duration(hours) belonging to a date range
+  # rename col so merge can be done on date
+  # merge and re-order col names
+  dfx <- ddply(match.AndyDeb, .(lsm_date), summarize, duration=sum(duration))
+  names(dfx)[names(dfx) == 'lsm_date'] <- 'date'
+  dfx <- merge(lsm, dfx)
+  
+  # add new columns then reorder
+  dfx$intensifier_diff  <- abs(dfx$intensifier_fraction_A - dfx$intensifier_fraction_B)
+  dfx$personal_diff     <- abs(dfx$personal_fraction_A - dfx$personal_fraction_B)
+  dfx$lexical_diff      <- abs(dfx$lexical_density_A - dfx$lexical_density_B)
+  dfx$iqv_diff          <- abs(dfx$iqv_A - dfx$iqv_B)
+  dfx$entropy_diff      <- abs(dfx$entropy_A - dfx$entropy_B)
+  dfx$cumm_duration     <- cumsum(dfx$duration)
+  dfx <- dfx[,c("date", "cumm_duration", "personal_diff", "intensifier_diff", "lexical_diff", 
+                "iqv_diff", "entropy_diff", "counts_A", "counts_B")]
   assign("match.lsmAndyDeb", dfx, envir = .GlobalEnv)
   
 }
@@ -99,7 +119,7 @@ get_matching_data <- function() {
 # load deb's data from JSON to dataframe format
 load_andy <- function() {
   print("Loading data for andy...")
-  jsonAndy <- fromJSON("datasets/andy_moves.json")
+  jsonAndy <- fromJSON("~/dev/research/partner//datasets//andy_moves.json")
   
   # json data contains two columns: "metadata" and "data"
   # these columns are individually dataframes
@@ -151,7 +171,7 @@ load_data <- function() {
 #        change deb.onlydate retrieval form
 load_deb <- function() {
   print("Loading data for deb...")
-  jsonDeb <- fromJSON("datasets/deborah_moves.json")
+  jsonDeb <- fromJSON("~/dev/research/partner//datasets//deborah_moves.json")
   
   #
   #TO-DO: get rid of magic row_range hack
@@ -217,6 +237,7 @@ load_library <- function() {
 load_lsm <- function() {
   lsm_file = "~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv"
   df <- read.csv(lsm_file)
+  assign("lsm_orig", df, envir = .GlobalEnv)
   
   # drop some cols
   # rename one col
@@ -227,35 +248,92 @@ load_lsm <- function() {
   df$date <- strptime(df$date, "%m/%d/%Y")
   df$date <- as.character(df$date)
   
-  assign("lsm", df, envir = .GlobalEnv)
+  assign("lsm", df[85:110,], envir = .GlobalEnv)
 }
 
 # draw different graphs/charts
 load_visuals <- function() {
-  #BAR GRAPH
-
-  
-  #LINE GRAPH
+  graph.bar <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=personal_diff, color=date)) + 
+      geom_bar(stat = "identity")#+ 
+      #xlab("Date together in same location") + 
+      #ylab("Cummulative hours spent)") +
+      ggtitle("Andy & Deborah")
+            
   # Change color of both line and points
   # Change line type and point type, and use thicker line and larger points
   # Change points to circles with white fill
-  graph <-ggplot(data=match.lsmAndyDeb, aes(x=date, y=duration, group=1)) + 
-              geom_line(colour="red", linetype="dotted", size=0.5) + 
-              geom_point(color="black", size=4, shape=21, fill="white") +
-              xlab("Date together in same location") + 
-              ylab("Duration (No of hours)") +
-              ggtitle("Date vs Duration for Andy & Deborah")
-  
-  ggplot(data=match.lsmAndyDeb, aes(x=intensifier_fraction_A, y=duration, colour=date)) +
-        geom_line(size=1.5) +
-        geom_point() +
-        xlab("Date together in same location") + 
-        ylab("Duration (No of hours)") +
-        ggtitle("Andy vs Deborah")          
-  
-  assign("graph.together", graph, envir=.GlobalEnv)  
-  graph
+  graph.line1 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=personal_diff, group=1)) + 
+      geom_line(colour="blue", linetype="dotted", size=0.5) + 
+      geom_point(color="black", size=4, shape=21, fill="white") 
+      #xlab("Date together in same location") + 
+      #ylab("Duration (No of hours)") +
+      #ggtitle("Date vs Personal_dff for Andy & Deborah")
 
+  graph.line2 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=intensifier_diff, group=1)) + 
+    geom_line(colour="red", linetype="dotted", size=0.5) + 
+    geom_point(color="black", size=4, shape=21, fill="white")        
+  
+  graph.line3 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=lexical_diff, group=1)) + 
+    geom_line(colour="red", linetype="dotted", size=0.5) + 
+    geom_point(color="black", size=4, shape=21, fill="white")        
+  
+  multiplot(graph.line1, graph.line2, graph.line3, col=1)
+}
+
+load_visuals_on_one_chart <- function() {
+  ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration)) +
+    #geom_line(aes(y=personal_diff, color="personal")) + 
+    geom_line(aes(y=intensifier_diff, color="intensifier")) +
+    #geom_line(aes(y=lexical_diff, color="lexical")) +
+    xlab("Cummulative hours spent over weeks") + 
+    ylab("LSM Value") +
+    ggtitle("Andy vs Deborah") 
+  
+}
+# Multiple plot function
+#
+# ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
+# - cols:   Number of columns in layout
+# - layout: A matrix specifying the layout. If present, 'cols' is ignored.
+#
+# If the layout is something like matrix(c(1,2,3,3), nrow=2, byrow=TRUE),
+# then plot 1 will go in the upper left, 2 will go in the upper right, and
+# 3 will go all the way across the bottom.
+#
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  require(grid)
+  
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+  
+  numPlots = length(plots)
+  
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                     ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+  
+  if (numPlots==1) {
+    print(plots[[1]])
+    
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+    
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+      
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
 }
 
 #change to workspace directory
