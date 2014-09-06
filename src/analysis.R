@@ -1,9 +1,14 @@
-##
+################
 # Fabian Okeke
 # Aug 6th, 2014
-##
+#
+################
 
-# clear command line
+#
+# NB: call setup() to get started
+#
+
+# random function just because it's like unix clear() command
 clear <- function() {
   cat("\014")
 }
@@ -161,9 +166,8 @@ load_andy <- function() {
 
 # load all data
 load_data <- function() {
-  load_andy()
-  load_deb()
-  load_lsm()
+  load_moves("datasets/latest/all_moves_files.txt")
+  load_lsm("~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv")
 }
 
 # load andy's data from JSON to dataframe format
@@ -234,9 +238,8 @@ load_library <- function() {
 # then import that file
 # load lsm data
 # change date format from 'mo/day/yr' to 'yr-mo-day' 
-load_lsm <- function() {
-  lsm_file = "~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv"
-  df <- read.csv(lsm_file)
+load_lsm <- function(location) {
+  df <- read.csv(location)
   assign("lsm_orig", df, envir = .GlobalEnv)
   
   # drop some cols
@@ -249,6 +252,17 @@ load_lsm <- function() {
   df$date <- as.character(df$date)
   
   assign("lsm", df[85:110,], envir = .GlobalEnv)
+}
+
+# load moves data files
+# read.table() used so comments in file are ignored
+# convert format read to a list with their corresponding names
+load_moves <- function(location) {
+  file_list <- read.table(location)
+  file_list <- as.character(file_list$V1)
+  
+  # create dataframes of each of the files
+  lapply(file_list, FUN=make_df_from_json)
 }
 
 # draw different graphs/charts
@@ -290,6 +304,98 @@ load_visuals_on_one_chart <- function() {
     ggtitle("Andy vs Deborah") 
   
 }
+
+# make global dataframe variable from json file
+# @param name dataframe should be called and 
+#        file to be loaded 
+make_df_from_json <- function(file) {
+  cat("Loading data from", file, "...")
+  name <- substrRight(file, 11)
+  json_data <- fromJSON(file)
+  
+  # json data contains two columns: "metadata" and "data"
+  # these columns are individually dataframes
+  # FOCUS is on "data" dataframe as the information of 
+  # "metadata" can be extracted from "data"
+  assign(name, json_data[,"data"], envir = .GlobalEnv)
+  cat(name, "dataframe now exists.\n")
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  andy <- json_data[,"data"]
+  andy.rPlace <- andy[andy$type=="Place",]
+  andy.rMove <- andy[andy$type=="Move",]
+  andy.rPlace.cPlace <- andy.rPlace[,c("startTime", "endTime", "place")]
+  
+  
+  # json data contains two columns: "metadata" and "data"
+  # these columns are individually dataframes
+  # FOCUS is on "data" dataframe as the information of 
+  # "metadata" can be extracted from "data"
+  #assign("andy", jsonAndy[,"data"], envir = .GlobalEnv)
+  
+  # select only rows where type == "Place"
+  #assign("andy.rPlace", , envir = .GlobalEnv)
+  
+  # select only rows where type == "Move"
+  #assign("andy.rMove", , envir = .GlobalEnv) 
+  
+  # rows where "type" == "Place", 
+  # select only "times" and "place" columns
+  # display selected contents of nested dataframes
+  assign("andy.rPlace.cPlace", , envir = .GlobalEnv)
+  assign("andy.rPlace.cPlace", 
+         data.frame(
+           "date"       = format_date( andy.rPlace.cPlace[,"endTime"], removeTime=TRUE ),
+           "startTime"  = format_date( andy.rPlace.cPlace[,"startTime"] ), 
+           "endTime"    = format_date( andy.rPlace.cPlace[,"endTime"] ) , 
+           "place.id"   = andy.rPlace.cPlace[,"place"][,"id"], 
+           "lat"        = andy.rPlace.cPlace[,"place"][,"location"][,"lat"],
+           "lon"        = andy.rPlace.cPlace[,"place"][,"location"][,"lon"] 
+         ), 
+         envir = .GlobalEnv)
+  
+  # rows where "type" == "Place", 
+  # select only col=="activities"
+  assign("andy.rPlace.cActivities", andy.rPlace[,"activities"], envir = .GlobalEnv)
+  
+  # rows where "type" == "Move", 
+  # select only col=="activities"
+  assign("andy.rMove.cActivities", andy.rMove[,"activities"], envir = .GlobalEnv)
+  
+  print ("andy dataframe is now available.")
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+}
+
+
+
 # Multiple plot function
 #
 # ggplot objects can be passed in ..., or to plotlist (as a list of ggplot objects)
@@ -354,4 +460,9 @@ setup <- function() {
   get_matching_data() 
   load_visuals()
   print("Done! Ready to roll.")
+}
+
+# substring last n characters in a string
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
 }
