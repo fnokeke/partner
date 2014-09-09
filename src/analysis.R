@@ -13,6 +13,28 @@ clear <- function() {
   cat("\014")
 }
 
+# create all global variables needed
+create_globals <- function() {
+  assign("g.all_df", NULL, envir=.GlobalEnv)
+  assign("g.all_graphs", NULL, envir=.GlobalEnv)
+  assign("g.lsm", NULL, envir=.GlobalEnv)
+}
+
+# plot graph of given dataframe
+draw_chart <- function(df_wt_lsm) {
+  graph <- ggplot(data=df_wt_lsm, aes(x=cumm_duration)) +
+    #geom_line(aes(y=personal_diff, color="personal")) + 
+    geom_line(aes(y=intensifier_diff, color="intensifier")) 
+  geom_line(aes(y=lexical_diff, color="lexical")) +
+    xlab("Cummulative hours spent over weeks") + 
+    ylab("LSM Value")  
+  
+  # update global graphs variable
+  all_graphs <- c(g.all_graphs, graph)
+  assign("g.all_graphs", all_graphs, envir=.GlobalEnv)
+  print(graph)
+}
+
 # TO-DO: clean up this function
 factor_to_char <- function(dataframe) {
   indices <- sapply(dataframe, is.factor)
@@ -43,11 +65,23 @@ list_to_df <- function(your_list) {
   do.call(rbind.data.frame, your_list)
 }
 
+# return list of all dataframes
+get_all_df <- function() {
+  return(g.all_df)
+}
+
 # obtain types of data in each col
 get_col_classes <- function(dataframe) {
     initial <- dataframe[100,]
     classes <- sapply(initial, class)
     classes
+}
+
+
+get_col_names <- function(df, vec_list) {
+  name <- deparse(substitute(df))
+  vec <- paste(name, vec_list, sep=".")
+  return(vec)
 }
 
 #get date matches for both two dataframes
@@ -60,7 +94,7 @@ get_date_match <- function(df1, df2, col) {
 get_matching_data <- function() {
  
   # combine their place data
-  dfx <- merge(andy.rPlace.cPlace, deb.rPlace.cPlace, all=T, by = 'date')
+  dfx <- merge(andy.rPlace.cPlace, deb.rPlace.cPlace, all=T, by='date')
   dfx <- dfx[complete.cases(dfx),]
   
   #update col names to better represent their values
@@ -121,6 +155,96 @@ get_matching_data <- function() {
   
 }
 
+
+# retrieve matching date and matching timestamp in same and reverse orders
+get_matched_df <- function(df1, df2, lsm_df=g.lsm) {
+  
+  # combine their place data
+  merged.df <- merge(df1, df2, all=T, by='date')
+  merged.df <- merged.df[complete.cases(merged.df),]
+  
+  #update col names to better represent their values
+  vec = c("start", "end", "placeid", "lat", "lon")
+  df1.vec = get_col_names(df1, vec)
+  df2.vec = get_col_names(df2, vec)
+  names(merged.df) <- c( "date", df1.vec, df2.vec)
+  
+  #TO-DO: get rid of magic numbers
+  # get only rows where their locations are relatively close
+  # df1.lat - df2.lat <= diff_limit
+  # df1.lon - df2.lon <= diff_limit
+  diff_limit <- 0.001
+  merged.df <- merged.df[ abs( merged.df[,5] - merged.df[,10] ) <= diff_limit &
+                          abs( merged.df[,6] - merged.df[,11] ) <= diff_limit,]
+  
+  # get only rows where their time at same place intersects for each day 
+  #dfx <- dfx[ !(dfx$andy.start > dfx$deb.end) &
+  #              !(dfx$andy.end < dfx$deb.start),]
+  merged.df <- merged.df[ !(merged.df[,2] > merged.df[,8]) &
+                          !(merged.df[,3] < merged.df[,7]),]
+  
+  # find the actual time intersection 
+  # round off duration of intersection in hours (divide by 3600)
+  # change duration format from 'difftime' to 'numeric'
+  merged.df$startIntersect <- pmax( merged.df[,2], merged.df[,7] )
+  merged.df$endIntersect   <- pmin( merged.df[,3], merged.df[,8] )
+  merged.df$duration       <- (merge.df$endIntersect - merged.df$startIntersect) / 3600
+  merged.df$duration       <- round(merged.df$duration, 2)
+  merged.df$duration       <- as.numeric(merged.df$duration)
+  
+  # select specific columns and reshape dataframe
+  merged.df <- merged.df[,c("date", "startIntersect", "endIntersect", "duration")]
+  merged.df <- ddply(dfx, .(date), summarize, duration=sum(duration))
+  
+  # TO-DO: REMOVE
+  # REDUNDANT
+  merged.df$date <- as.character(merged.df$date)
+  
+  
+  #create global variable
+  #NO NEED
+  #assign("match.AndyDeb", dfx, envir = .GlobalEnv)
+  
+  # lsm is weekly while match.AndyDeb is daily so
+  # use cut() to combine both dates
+  #dd <- as.Date(match.AndyDeb$date)
+  #max_date <- max(dd)
+  #break_period <- c(as.Date(lsm$date), max_date)
+  #new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
+  #match.AndyDeb$lsm_date <- new_col
+  
+  # TO-DO: REMOVE
+  # REDUNDANT
+  dd <- as.Date(merged.df$date)
+  
+  # COMBINE MERGED DATA WITH LSM
+  max_date <- max(dd)
+  break_period <- c(as.Date(lsm_df$date), max_date)
+  new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
+  merged.df$lsm_date <- new_col
+  
+  # summarize and add up duration(hours) belonging to a date range
+  # rename col so merge can be done on date
+  # merge and re-order col names
+  merge.df.lsm <- ddply(merged.df, .(lsm_date), summarize, duration=sum(duration))
+  dfx <- merge.df.lsm
+  names(dfx)[names(dfx) == 'lsm_date'] <- 'date'
+  dfx <- merge(lsm, dfx)
+  
+  # add new columns then reorder
+  dfx$intensifier_diff  <- abs(dfx$intensifier_fraction_A - dfx$intensifier_fraction_B)
+  dfx$personal_diff     <- abs(dfx$personal_fraction_A - dfx$personal_fraction_B)
+  dfx$lexical_diff      <- abs(dfx$lexical_density_A - dfx$lexical_density_B)
+  dfx$iqv_diff          <- abs(dfx$iqv_A - dfx$iqv_B)
+  dfx$entropy_diff      <- abs(dfx$entropy_A - dfx$entropy_B)
+  dfx$cumm_duration     <- cumsum(dfx$duration)
+  dfx <- dfx[,c("date", "cumm_duration", "personal_diff", "intensifier_diff", "lexical_diff",  
+                "iqv_diff", "entropy_diff", "counts_A", "counts_B")]
+  merge.df.lsm <- dfx
+  return(merge.df.lsm)
+}
+
+
 # load deb's data from JSON to dataframe format
 load_andy <- function() {
   print("Loading data for andy...")
@@ -166,7 +290,8 @@ load_andy <- function() {
 
 # load all data
 load_data <- function() {
-  load_moves("datasets/latest/all_moves_files.txt")
+  create_globals()
+  load_moves("~/dev/research/partner//datasets//latest//all_moves_files.txt")
   load_lsm("~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv")
 }
 
@@ -251,7 +376,8 @@ load_lsm <- function(location) {
   df$date <- strptime(df$date, "%m/%d/%Y")
   df$date <- as.character(df$date)
   
-  assign("lsm", df[85:110,], envir = .GlobalEnv)
+  #update global variable
+  assign("g.lsm", df[85:110,], envir=.GlobalEnv)
 }
 
 # load moves data files
@@ -294,107 +420,28 @@ load_visuals <- function() {
   multiplot(graph.line1, graph.line2, graph.line3, col=1)
 }
 
-load_visuals_on_one_chart <- function() {
-  ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration)) +
-    #geom_line(aes(y=personal_diff, color="personal")) + 
-    geom_line(aes(y=intensifier_diff, color="intensifier")) +
-    #geom_line(aes(y=lexical_diff, color="lexical")) +
-    xlab("Cummulative hours spent over weeks") + 
-    ylab("LSM Value") +
-    ggtitle("Andy vs Deborah") 
-  
-}
-
-# make global dataframe variable from json file
-# @param name dataframe should be called and 
-#        file to be loaded 
-make_df_from_json <- function(file) {
-  cat("Loading data from", file, "...")
-  name <- substrRight(file, 11)
-  json_data <- fromJSON(file)
+# make global dataframe variable from json file path
+# so name of df made will be formed from file path 
+make_df_from_json <- function(file_path) {
+  cat("Loading data from", file_path, "...")
+  name <- substrRight(file_path, 11)
+  json_data <- fromJSON(file_path)
   
   # json data contains two columns: "metadata" and "data"
   # these columns are individually dataframes
   # FOCUS is on "data" dataframe as the information of 
   # "metadata" can be extracted from "data"
-  assign(name, json_data[,"data"], envir = .GlobalEnv)
+  # only specific cols of dataframe are currently needed
+  # so shrink dataframe to produce only needed parts
+  dfx <- json_data[, "data"]
+  dfx <- shrink_df(dfx)
+  assign(name, dfx, envir=.GlobalEnv)
   cat(name, "dataframe now exists.\n")
   
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  andy <- json_data[,"data"]
-  andy.rPlace <- andy[andy$type=="Place",]
-  andy.rMove <- andy[andy$type=="Move",]
-  andy.rPlace.cPlace <- andy.rPlace[,c("startTime", "endTime", "place")]
-  
-  
-  # json data contains two columns: "metadata" and "data"
-  # these columns are individually dataframes
-  # FOCUS is on "data" dataframe as the information of 
-  # "metadata" can be extracted from "data"
-  #assign("andy", jsonAndy[,"data"], envir = .GlobalEnv)
-  
-  # select only rows where type == "Place"
-  #assign("andy.rPlace", , envir = .GlobalEnv)
-  
-  # select only rows where type == "Move"
-  #assign("andy.rMove", , envir = .GlobalEnv) 
-  
-  # rows where "type" == "Place", 
-  # select only "times" and "place" columns
-  # display selected contents of nested dataframes
-  assign("andy.rPlace.cPlace", , envir = .GlobalEnv)
-  assign("andy.rPlace.cPlace", 
-         data.frame(
-           "date"       = format_date( andy.rPlace.cPlace[,"endTime"], removeTime=TRUE ),
-           "startTime"  = format_date( andy.rPlace.cPlace[,"startTime"] ), 
-           "endTime"    = format_date( andy.rPlace.cPlace[,"endTime"] ) , 
-           "place.id"   = andy.rPlace.cPlace[,"place"][,"id"], 
-           "lat"        = andy.rPlace.cPlace[,"place"][,"location"][,"lat"],
-           "lon"        = andy.rPlace.cPlace[,"place"][,"location"][,"lon"] 
-         ), 
-         envir = .GlobalEnv)
-  
-  # rows where "type" == "Place", 
-  # select only col=="activities"
-  assign("andy.rPlace.cActivities", andy.rPlace[,"activities"], envir = .GlobalEnv)
-  
-  # rows where "type" == "Move", 
-  # select only col=="activities"
-  assign("andy.rMove.cActivities", andy.rMove[,"activities"], envir = .GlobalEnv)
-  
-  print ("andy dataframe is now available.")
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+  #update global list of all df
+  all_df <- c(g.all_df, name)
+  assign("g.all_df", all_df, envir=.GlobalEnv)
 }
-
-
 
 # Multiple plot function
 #
@@ -456,11 +503,53 @@ setup <- function() {
   set_dir()
   load_library()
   load_data()
-  print("Getting matching rows for Deb & Andy...")
-  get_matching_data() 
-  load_visuals()
-  print("Done! Ready to roll.")
+  
+  #TO-DO
+  #mm <- load_moves()
+  #lsm <- load_lsm()
+  #graph(mm,lsm)
+  
+  all_df <- get_all_df()
+  mix_matrix <- combn(all_df, 2)
+  
+  for (i in 1:ncol(mix_matrix)) {
+    combo_df <- mix_matrix[,i]
+    combo_df1 <- eval(parse(text=combo_df[1]))
+    combo_df2 <- eval(parse(text=combo_df[2]))
+    df_wt_lsm  <- get_matched_df(combo_df1, combo_df2)
+    load_visuals(df_wt_lsm)
+    paste("Loaded visuals for", combo_df[1], "vs", combo_df[2])
+  }
+  
+  print("Done! Enjoy :)")
 }
+
+# shrink df by selecting specific cols 
+shrink_df <- function(dataframe) {
+  df <- dataframe
+  
+  # select only rows where type == "Place"
+  df.rPlace <- df[df$type=="Place",]
+  
+  # rows where "type" == "Place", 
+  # select only the two "time" and "place" columns
+  # display selected contents of nested dataframes
+  df.rPlace.cPlace <- df.rPlace[, c("startTime", "endTime", "place")]
+  df.rPlace.cPlace <- 
+        data.frame(
+           "date"       = format_date( df.rPlace.cPlace[,"endTime"], removeTime=TRUE ),
+           "startTime"  = format_date( df.rPlace.cPlace[,"startTime"] ), 
+           "endTime"    = format_date( df.rPlace.cPlace[,"endTime"] ) , 
+           "place.id"   = df.rPlace.cPlace[,"place"][,"id"], 
+           "lat"        = df.rPlace.cPlace[,"place"][,"location"][,"lat"],
+           "lon"        = df.rPlace.cPlace[,"place"][,"location"][,"lon"] 
+         )
+  
+  # return shrunk dataframe  
+  df <- df.rPlace.cPlace
+  df
+}
+
 
 # substring last n characters in a string
 substrRight <- function(x, n){
