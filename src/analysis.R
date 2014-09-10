@@ -21,13 +21,15 @@ create_globals <- function() {
 }
 
 # plot graph of given dataframe
-draw_chart <- function(df_wt_lsm) {
+draw_chart <- function(df_wt_lsm, df1.name, df2.name) {
+  title = paste(df1.name, "vs", df2.name)
   graph <- ggplot(data=df_wt_lsm, aes(x=cumm_duration)) +
-    #geom_line(aes(y=personal_diff, color="personal")) + 
-    geom_line(aes(y=intensifier_diff, color="intensifier")) 
-  geom_line(aes(y=lexical_diff, color="lexical")) +
+    geom_line(aes(y=personal_diff, color="personal")) + 
+    geom_line(aes(y=intensifier_diff, color="intensifier")) +
+    geom_line(aes(y=lexical_diff, color="lexical")) +
     xlab("Cummulative hours spent over weeks") + 
-    ylab("LSM Value")  
+    ylab("LSM Value") + 
+    ggtitle(title)
   
   # update global graphs variable
   all_graphs <- c(g.all_graphs, graph)
@@ -70,6 +72,11 @@ get_all_df <- function() {
   return(g.all_df)
 }
 
+# return fixed lsm
+get_all_lsm <- function() {
+  return(g.lsm)
+}
+
 # obtain types of data in each col
 get_col_classes <- function(dataframe) {
     initial <- dataframe[100,]
@@ -78,8 +85,7 @@ get_col_classes <- function(dataframe) {
 }
 
 
-get_col_names <- function(df, vec_list) {
-  name <- deparse(substitute(df))
+get_col_names <- function(name, vec_list) {
   vec <- paste(name, vec_list, sep=".")
   return(vec)
 }
@@ -157,91 +163,86 @@ get_matching_data <- function() {
 
 
 # retrieve matching date and matching timestamp in same and reverse orders
-get_matched_df <- function(df1, df2, lsm_df=g.lsm) {
+get_matched_df <- function(df1, df1.name, df2, df2.name, lsm_df=get_all_lsm()) {
   
-  # combine their place data
+  # get the dataframes and their corresponding names  
   merged.df <- merge(df1, df2, all=T, by='date')
   merged.df <- merged.df[complete.cases(merged.df),]
   
   #update col names to better represent their values
   vec = c("start", "end", "placeid", "lat", "lon")
-  df1.vec = get_col_names(df1, vec)
-  df2.vec = get_col_names(df2, vec)
+  df1.vec = get_col_names(df1.name, vec)
+  df2.vec = get_col_names(df2.name, vec)
   names(merged.df) <- c( "date", df1.vec, df2.vec)
   
   #TO-DO: get rid of magic numbers
   # get only rows where their locations are relatively close
   # df1.lat - df2.lat <= diff_limit
   # df1.lon - df2.lon <= diff_limit
-  diff_limit <- 0.001
-  merged.df <- merged.df[ abs( merged.df[,5] - merged.df[,10] ) <= diff_limit &
-                          abs( merged.df[,6] - merged.df[,11] ) <= diff_limit,]
-  
-  # get only rows where their time at same place intersects for each day 
-  #dfx <- dfx[ !(dfx$andy.start > dfx$deb.end) &
-  #              !(dfx$andy.end < dfx$deb.start),]
-  merged.df <- merged.df[ !(merged.df[,2] > merged.df[,8]) &
-                          !(merged.df[,3] < merged.df[,7]),]
-  
-  # find the actual time intersection 
-  # round off duration of intersection in hours (divide by 3600)
-  # change duration format from 'difftime' to 'numeric'
-  merged.df$startIntersect <- pmax( merged.df[,2], merged.df[,7] )
-  merged.df$endIntersect   <- pmin( merged.df[,3], merged.df[,8] )
-  merged.df$duration       <- (merge.df$endIntersect - merged.df$startIntersect) / 3600
-  merged.df$duration       <- round(merged.df$duration, 2)
-  merged.df$duration       <- as.numeric(merged.df$duration)
-  
-  # select specific columns and reshape dataframe
-  merged.df <- merged.df[,c("date", "startIntersect", "endIntersect", "duration")]
-  merged.df <- ddply(dfx, .(date), summarize, duration=sum(duration))
-  
-  # TO-DO: REMOVE
-  # REDUNDANT
-  merged.df$date <- as.character(merged.df$date)
-  
-  
-  #create global variable
-  #NO NEED
-  #assign("match.AndyDeb", dfx, envir = .GlobalEnv)
-  
-  # lsm is weekly while match.AndyDeb is daily so
-  # use cut() to combine both dates
-  #dd <- as.Date(match.AndyDeb$date)
-  #max_date <- max(dd)
-  #break_period <- c(as.Date(lsm$date), max_date)
-  #new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
-  #match.AndyDeb$lsm_date <- new_col
-  
-  # TO-DO: REMOVE
-  # REDUNDANT
-  dd <- as.Date(merged.df$date)
-  
-  # COMBINE MERGED DATA WITH LSM
-  max_date <- max(dd)
-  break_period <- c(as.Date(lsm_df$date), max_date)
-  new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
-  merged.df$lsm_date <- new_col
-  
-  # summarize and add up duration(hours) belonging to a date range
-  # rename col so merge can be done on date
-  # merge and re-order col names
-  merge.df.lsm <- ddply(merged.df, .(lsm_date), summarize, duration=sum(duration))
-  dfx <- merge.df.lsm
-  names(dfx)[names(dfx) == 'lsm_date'] <- 'date'
-  dfx <- merge(lsm, dfx)
-  
-  # add new columns then reorder
-  dfx$intensifier_diff  <- abs(dfx$intensifier_fraction_A - dfx$intensifier_fraction_B)
-  dfx$personal_diff     <- abs(dfx$personal_fraction_A - dfx$personal_fraction_B)
-  dfx$lexical_diff      <- abs(dfx$lexical_density_A - dfx$lexical_density_B)
-  dfx$iqv_diff          <- abs(dfx$iqv_A - dfx$iqv_B)
-  dfx$entropy_diff      <- abs(dfx$entropy_A - dfx$entropy_B)
-  dfx$cumm_duration     <- cumsum(dfx$duration)
-  dfx <- dfx[,c("date", "cumm_duration", "personal_diff", "intensifier_diff", "lexical_diff",  
-                "iqv_diff", "entropy_diff", "counts_A", "counts_B")]
-  merge.df.lsm <- dfx
-  return(merge.df.lsm)
+  #assign("tracker111", merged.df, envir=.GlobalEnv)
+  diff_limit <- 30
+  merged.df <- merged.df[ merged.df[,5] - merged.df[,10]  <= diff_limit & 
+                          merged.df[,6] - merged.df[,11]  <= diff_limit,]
+
+  if (nrow(merged.df) > 0) { 
+    # get only rows where their time at same place intersects for each day 
+    #dfx <- dfx[ !(dfx$andy.start > dfx$deb.end) &
+    #              !(dfx$andy.end < dfx$deb.start),]
+    merged.df <- merged.df[ !(merged.df[,2] > merged.df[,8]) &
+                            !(merged.df[,3] < merged.df[,7]),]
+    
+    # find the actual time intersection 
+    # round off duration of intersection in hours (divide by 3600)
+    # change duration format from 'difftime' to 'numeric'
+    merged.df$startIntersect <- pmax( merged.df[,2], merged.df[,7] )
+    merged.df$endIntersect   <- pmin( merged.df[,3], merged.df[,8] )
+    merged.df$duration       <- (merged.df$endIntersect - merged.df$startIntersect) / 3600
+    merged.df$duration       <- round(merged.df$duration, 2)
+    merged.df$duration       <- as.numeric(merged.df$duration)
+    
+    # select specific columns and reshape dataframe
+    merged.df <- merged.df[,c("date", "startIntersect", "endIntersect", "duration")]
+    merged.df <- ddply(merged.df, .(date), summarize, duration=sum(duration))
+    
+    # TO-DO: REMOVE
+    # REDUNDANT
+    merged.df$date <- as.character(merged.df$date)
+    
+    # TO-DO: REMOVE
+    # REDUNDANT
+    dd <- as.Date(merged.df$date)
+    
+    # COMBINE MERGED DATA WITH LSM
+    max_date <- max(dd)
+    break_period <- c(as.Date(lsm_df$date), max_date)
+    new_col <- cut(dd, breaks=break_period, include.lowest=TRUE)
+    merged.df$lsm_date <- new_col
+    
+    # summarize and add up duration(hours) belonging to a date range
+    # rename col so merge can be done on date
+    # merge and re-order col names  
+    
+    merged.df.lsm <- ddply(merged.df, .(lsm_date), summarize, duration=sum(duration))
+    names(merged.df.lsm)[names(merged.df.lsm) == 'lsm_date'] <- 'date'
+    
+    dfx <- merge(lsm_df, merged.df.lsm, by='date')
+    
+    # add new columns then reorder
+    dfx$intensifier_diff  <- abs(dfx$intensifier_fraction_A - dfx$intensifier_fraction_B)
+    dfx$personal_diff     <- abs(dfx$personal_fraction_A - dfx$personal_fraction_B)
+    dfx$lexical_diff      <- abs(dfx$lexical_density_A - dfx$lexical_density_B)
+    dfx$iqv_diff          <- abs(dfx$iqv_A - dfx$iqv_B)
+    dfx$entropy_diff      <- abs(dfx$entropy_A - dfx$entropy_B)
+    dfx$cumm_duration     <- cumsum(dfx$duration)
+    dfx <- dfx[,c("date", "cumm_duration", "personal_diff", "intensifier_diff", "lexical_diff",  
+                  "iqv_diff", "entropy_diff", "counts_A", "counts_B")]
+    merged.df.lsm <- dfx
+    return(merged.df.lsm)
+  }
+  else if (nrow(merged.df) == 0) {
+      msg <- paste("Nothing to do:", df1.name, "and", df2.name, "datasets have no shared locations.")
+      print(msg)
+  }
 }
 
 
@@ -514,11 +515,16 @@ setup <- function() {
   
   for (i in 1:ncol(mix_matrix)) {
     combo_df <- mix_matrix[,i]
-    combo_df1 <- eval(parse(text=combo_df[1]))
-    combo_df2 <- eval(parse(text=combo_df[2]))
-    df_wt_lsm  <- get_matched_df(combo_df1, combo_df2)
-    load_visuals(df_wt_lsm)
-    paste("Loaded visuals for", combo_df[1], "vs", combo_df[2])
+    d1.name <- combo_df[1]
+    d2.name <- combo_df[2]
+    d1.df <- eval(parse(text=combo_df[1]))
+    d2.df <- eval(parse(text=combo_df[2]))
+    #combo_df1 <- c(d1.df, d1.name)
+    #combo_df2 <- c(d2.df, d2.name)
+    
+    df_wt_lsm  <- get_matched_df(d1.df, d1.name, d2.df, d2.name)
+    draw_chart(df_wt_lsm, d1.name, d2.name)
+    paste("Loaded visuals for", d1.name, "vs", d2.name)
   }
   
   print("Done! Enjoy :)")
