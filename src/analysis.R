@@ -37,13 +37,6 @@ draw_chart <- function(df_wt_lsm, df1.name, df2.name) {
   print(graph)
 }
 
-# TO-DO: clean up this function
-factor_to_char <- function(dataframe) {
-  indices <- sapply(dataframe, is.factor)
-  dataframe[indices] <- lapply(dataframe[indices], as.character)
-  dataframe
-}
-
 # clean up date to specific format
 # remove 'T' that comes befoer time
 # eliminate the last part of date with .000-04:00 or .999-04:00
@@ -62,11 +55,6 @@ format_date <- function(df, removeTime=FALSE) {
   df
 }
 
-#convert list to dataframe
-list_to_df <- function(your_list) {
-  do.call(rbind.data.frame, your_list)
-}
-
 # return list of all dataframes
 get_all_df <- function() {
   return(g.all_df)
@@ -77,23 +65,9 @@ get_all_lsm <- function() {
   return(g.lsm)
 }
 
-# obtain types of data in each col
-get_col_classes <- function(dataframe) {
-    initial <- dataframe[100,]
-    classes <- sapply(initial, class)
-    classes
-}
-
-
 get_col_names <- function(name, vec_list) {
   vec <- paste(name, vec_list, sep=".")
   return(vec)
-}
-
-#get date matches for both two dataframes
-get_date_match <- function(df1, df2, col) {
-  isMatch <- df1[,col] %in% df2[,col]
-  df1[isMatch,]
 }
 
 # retrieve matching date and matching timestamp in same and reverse orders
@@ -158,9 +132,7 @@ get_matching_data <- function() {
   dfx <- dfx[,c("date", "cumm_duration", "personal_diff", "intensifier_diff", "lexical_diff", 
                 "iqv_diff", "entropy_diff", "counts_A", "counts_B")]
   assign("match.lsmAndyDeb", dfx, envir = .GlobalEnv)
-  
 }
-
 
 # retrieve matching date and matching timestamp in same and reverse orders
 get_matched_df <- function(df1, df1.name, df2, df2.name, lsm_df=get_all_lsm()) {
@@ -245,111 +217,11 @@ get_matched_df <- function(df1, df1.name, df2, df2.name, lsm_df=get_all_lsm()) {
   }
 }
 
-
-# load deb's data from JSON to dataframe format
-load_andy <- function() {
-  print("Loading data for andy...")
-  jsonAndy <- fromJSON("~/dev/research/partner//datasets//andy_moves.json")
-  
-  # json data contains two columns: "metadata" and "data"
-  # these columns are individually dataframes
-  # FOCUS is on "data" dataframe as the information of 
-  # "metadata" can be extracted from "data"
-  assign("andy", jsonAndy[,"data"], envir = .GlobalEnv)
-  
-  # select only rows where type == "Place"
-  assign("andy.rPlace", andy[andy$type=="Place",], envir = .GlobalEnv)
-  
-  # select only rows where type == "Move"
-  assign("andy.rMove", andy[andy$type=="Move",], envir = .GlobalEnv) 
-  
-  # rows where "type" == "Place", 
-  # select only "times" and "place" columns
-  # display selected contents of nested dataframes
-  assign("andy.rPlace.cPlace", andy.rPlace[,c("startTime", "endTime", "place")], envir = .GlobalEnv)
-  assign("andy.rPlace.cPlace", 
-         data.frame(
-           "date"       = format_date( andy.rPlace.cPlace[,"endTime"], removeTime=TRUE ),
-           "startTime"  = format_date( andy.rPlace.cPlace[,"startTime"] ), 
-           "endTime"    = format_date( andy.rPlace.cPlace[,"endTime"] ) , 
-           "place.id"   = andy.rPlace.cPlace[,"place"][,"id"], 
-           "lat"        = andy.rPlace.cPlace[,"place"][,"location"][,"lat"],
-           "lon"        = andy.rPlace.cPlace[,"place"][,"location"][,"lon"] 
-         ), 
-         envir = .GlobalEnv)
-  
-  # rows where "type" == "Place", 
-  # select only col=="activities"
-  assign("andy.rPlace.cActivities", andy.rPlace[,"activities"], envir = .GlobalEnv)
-  
-  # rows where "type" == "Move", 
-  # select only col=="activities"
-  assign("andy.rMove.cActivities", andy.rMove[,"activities"], envir = .GlobalEnv)
-  
-  print ("andy dataframe is now available.")
-}
-
 # load all data
 load_data <- function() {
   create_globals()
-  load_moves("~/dev/research/partner//datasets//latest//all_moves_files.txt")
-  load_lsm("~/dev/r/datasets/deborah.estrin-changun.tw.stats.csv")
-}
-
-# load andy's data from JSON to dataframe format
-# TO-DO: change magic numbers to variables, 
-#        change deb.onlydate retrieval form
-load_deb <- function() {
-  print("Loading data for deb...")
-  jsonDeb <- fromJSON("~/dev/research/partner//datasets//deborah_moves.json")
-  
-  #
-  #TO-DO: get rid of magic row_range hack
-  #
-  row_range <- 1060:2701  
-  
-  # json data contains two columns: "metadata" and "data"
-  # these columns are individually dataframes
-  # FOCUS is on "data" dataframe as the information of 
-  # "metadata" can be extracted from "data"
-  assign("deb", jsonDeb[row_range,"data"], envir = .GlobalEnv)
-  
-  # select only rows where type == "Place"
-  assign("deb.rPlace", deb[deb$type=="Place",], envir = .GlobalEnv)
-  
-  # select only rows where type == "Move"
-  assign("deb.rMove", deb[deb$type=="Move",], envir = .GlobalEnv) 
-  
-  # rows where "type" == "Place", 
-  # select only "times" and "place" columns
-  # display selected contents of nested dataframes
-  assign("deb.rPlace.cPlace", deb.rPlace[,c("startTime", "endTime", "place")], envir = .GlobalEnv)
-  assign("deb.rPlace.cPlace", 
-         data.frame(
-           "date"       = format_date( deb.rPlace.cPlace[,"endTime"], removeTime=TRUE ),
-           "startTime"  = format_date( deb.rPlace.cPlace[,"startTime"] ), 
-           "endTime"    = format_date( deb.rPlace.cPlace[,"endTime"] ) , 
-           "place.id"   = deb.rPlace.cPlace[,"place"][,"id"], 
-           "lat"        = deb.rPlace.cPlace[,"place"][,"location"][,"lat"],
-           "lon"        = deb.rPlace.cPlace[,"place"][,"location"][,"lon"] 
-         ), 
-         envir = .GlobalEnv)
-  
-  # rows where "type" == "Place", 
-  # select only col=="activities"
-  assign("deb.rPlace.cActivities", deb.rPlace[,"activities"], envir = .GlobalEnv)
-  
-  # rows where "type" == "Move", 
-  # select only col=="activities"
-  assign("deb.rMove.cActivities", deb.rMove[,"activities"], envir = .GlobalEnv)
-  
-  # get date summary showing earliest time at a place 
-  # and the latest time at same place for particular date
-  # NB: places with same 'place.id' have same lat and lon
-  dfx <- ddply(deb.rPlace.cPlace, .(date, place.id, lat, lon), summarize, min=min(startTime), max=max(endTime))
-  assign("deb.dateSummary", dfx, envir = .GlobalEnv)
-  
-  print ("deb dataframe is now available.")
+  load_moves("../datasets/latest/all_moves_files.txt")
+  load_lsm("../datasets/deborah.estrin-changun.tw.stats.csv")
 }
 
 # load necessary libraries
@@ -390,35 +262,6 @@ load_moves <- function(location) {
   
   # create dataframes of each of the files
   lapply(file_list, FUN=make_df_from_json)
-}
-
-# draw different graphs/charts
-load_visuals <- function() {
-  graph.bar <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=personal_diff, color=date)) + 
-      geom_bar(stat = "identity")#+ 
-      #xlab("Date together in same location") + 
-      #ylab("Cummulative hours spent)") +
-      ggtitle("Andy & Deborah")
-            
-  # Change color of both line and points
-  # Change line type and point type, and use thicker line and larger points
-  # Change points to circles with white fill
-  graph.line1 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=personal_diff, group=1)) + 
-      geom_line(colour="blue", linetype="dotted", size=0.5) + 
-      geom_point(color="black", size=4, shape=21, fill="white") 
-      #xlab("Date together in same location") + 
-      #ylab("Duration (No of hours)") +
-      #ggtitle("Date vs Personal_dff for Andy & Deborah")
-
-  graph.line2 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=intensifier_diff, group=1)) + 
-    geom_line(colour="red", linetype="dotted", size=0.5) + 
-    geom_point(color="black", size=4, shape=21, fill="white")        
-  
-  graph.line3 <-ggplot(data=match.lsmAndyDeb, aes(x=cumm_duration, y=lexical_diff, group=1)) + 
-    geom_line(colour="red", linetype="dotted", size=0.5) + 
-    geom_point(color="black", size=4, shape=21, fill="white")        
-  
-  multiplot(graph.line1, graph.line2, graph.line3, col=1)
 }
 
 # make global dataframe variable from json file path
@@ -505,11 +348,6 @@ setup <- function() {
   load_library()
   load_data()
   
-  #TO-DO
-  #mm <- load_moves()
-  #lsm <- load_lsm()
-  #graph(mm,lsm)
-  
   all_df <- get_all_df()
   mix_matrix <- combn(all_df, 2)
   
@@ -519,9 +357,7 @@ setup <- function() {
     d2.name <- combo_df[2]
     d1.df <- eval(parse(text=combo_df[1]))
     d2.df <- eval(parse(text=combo_df[2]))
-    #combo_df1 <- c(d1.df, d1.name)
-    #combo_df2 <- c(d2.df, d2.name)
-    
+   
     df_wt_lsm  <- get_matched_df(d1.df, d1.name, d2.df, d2.name)
     draw_chart(df_wt_lsm, d1.name, d2.name)
     paste("Loaded visuals for", d1.name, "vs", d2.name)

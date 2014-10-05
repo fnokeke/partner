@@ -7,7 +7,7 @@
 # each location of file per line 
 # use read.table() so comments are ignored in R
 
-datasets/latest/cameron.json
-datasets/latest/changun.json
-datasets/latest/faisal.json
-datasets/latest/ohmage.estrin.json
+#../datasets/latest/cameron.json
+#../datasets/latest/changun.json
+../datasets/latest/faisal.json
+../datasets/latest/ohmage.estrin.json
