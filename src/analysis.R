@@ -26,7 +26,7 @@ draw_chart <- function(df_wt_lsm, df1.name, df2.name) {
   graph <- ggplot(data=df_wt_lsm, aes(x=cumm_duration)) +
     geom_line(aes(y=personal_diff, color="personal")) + 
     geom_line(aes(y=intensifier_diff, color="intensifier")) +
-    geom_line(aes(y=lexical_diff, color="lexical")) +
+   # geom_line(aes(y=lexical_diff, color="lexical")) + #might want to omit lexical line because its high LSM value dwarfs other lines on graph
     xlab("Cummulative hours spent over weeks") + 
     ylab("LSM Value") + 
     ggtitle(title)
@@ -34,6 +34,20 @@ draw_chart <- function(df_wt_lsm, df1.name, df2.name) {
   # update global graphs variable
   all_graphs <- c(g.all_graphs, graph)
   assign("g.all_graphs", all_graphs, envir=.GlobalEnv)
+  
+  # open location to save image is 'device' 
+  # save graph as image to img directory and
+  # then close device
+  src_dir = getwd()
+  img_dir = "../img/"
+  setwd(img_dir)
+  img_title = paste(title, ".png")
+  png(filename = img_title)
+  print(graph)
+  dev.off()
+  setwd(src_dir)
+  
+  # print to screen
   print(graph)
 }
 
@@ -360,9 +374,9 @@ setup <- function() {
    
     df_wt_lsm  <- get_matched_df(d1.df, d1.name, d2.df, d2.name)
     draw_chart(df_wt_lsm, d1.name, d2.name)
-    paste("Loaded visuals for", d1.name, "vs", d2.name)
   }
   
+  print("Charts saved in ../partner/img")
   print("Done! Enjoy :)")
 }
 
