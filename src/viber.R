@@ -6,8 +6,6 @@ format_date <- function(df) {
 
 ####### viber message analysis#######
 file_path = "Dev/partner/datasets/viber/Fabian.csv"
-fab_msg_file = "Dev/partner/datasets/viber_cleaned/fab.msg.csv"
-vid_msg_file = "Dev/partner/datasets/viber_cleaned/vid.msg.csv"
 col_names = c("Date", "Time", "Sender", "PhoneNo", "Msg")
 
 # extract message for both 
@@ -27,6 +25,8 @@ fab.msg <- fab.df[,c("Date", "Msg")]
 fab.msg$Date <- format_date(fab.msg$Date)
 
 # write out msgs of both to files
+fab_msg_file = "Dev/partner/datasets/viber_cleaned/fab.msg.csv"
+vid_msg_file = "Dev/partner/datasets/viber_cleaned/vid.msg.csv"
 write.csv2(fab.msg$Msg, fab_msg_file, row.names=F)
 write.csv2(vid.msg$Msg, vid_msg_file, row.names=F)
 
@@ -56,11 +56,18 @@ fab.summary <- ddply(fab.msg,
                      .(wk_date), 
                      summarize,  
                      No_of_Msgs=length(wk_date), 
-                     txt=paste(unlist(Msg), collapse ="--"))
+                     comboMsg=paste(unlist(Msg), collapse ="--"))
 
 #vid
 vid.summary <- ddply(vid.msg, 
                      .(wk_date), 
                      summarize, 
                      No_of_Msgs=length(wk_date), 
-                     txt=paste(unlist(Msg), collapse ="--"))
+                     comboMsg=paste(unlist(Msg), collapse ="--"))
+
+
+# write out msgs of both to files
+fab_summary_file = "Dev/partner/datasets/viber_cleaned/fab.summary.csv"
+vid_summary_file = "Dev/partner/datasets/viber_cleaned/vid.summary.csv"
+write.csv2(fab.summary$comboMsg, fab_summary_file, row.names=F)
+write.csv2(vid.summary$comboMsg, vid_summary_file, row.names=F)
